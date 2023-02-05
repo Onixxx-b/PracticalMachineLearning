@@ -1,0 +1,126 @@
+---
+title: "Final Task: Prediction Assignment Writeup"
+output: html_document
+date: "2023-02-05"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = 'C:/Users/RAZER/source/R/PracticalMachineLearning')
+```
+
+This document is the final report of the Peer Assessment project from Coursera’s course Practical Machine Learning. It was built up in RStudio with help of rmarkdown library. This analysis is the basis for the course quiz and a prediction assignment writeup. 
+The goal of this project is to predict the manner in which they did the exercise. This is the “classe” variable in the training set.
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.
+
+
+```{r libraries}
+rm(list=ls())
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(1967) 
+library(knitr)
+library(lattice)
+library(ggplot2)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(corrplot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+library(data.table)
+library(corrplot)
+library(plotly)
+library(gbm)
+
+
+```
+
+## Reading training and test datasets
+
+The training data for this project are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The training dataset is partinioned in 2 to create a Training set (70% of the data) for the modeling process and a Test set (with the remaining 30%) for the validations.
+
+```{r reading}
+data_train <- read.csv("pml-training.csv")
+data_quiz <- read.csv("pml-testing.csv")
+in_train  <- createDataPartition(data_train$classe, p=0.70, list=FALSE)
+train_set <- data_train[ in_train, ]
+test_set  <- data_train[-in_train, ]
+nzv_var <- nearZeroVar(train_set)
+train_set <- train_set[ , -nzv_var]
+test_set  <- test_set [ , -nzv_var]
+```
+
+## Cleaning datasets
+
+In the dataset there is a lot of NA values, so I removed variables with more than 95% NA count.
+Columns 1 to 5 are identification variables only, so I removed them as well.
+
+```{r cleaning}
+na_var <- sapply(train_set, function(x) mean(is.na(x))) > 0.95
+train_set <- train_set[ , na_var == FALSE]
+test_set  <- test_set [ , na_var == FALSE]
+train_set <- train_set[ , -(1:5)]
+test_set  <- test_set [ , -(1:5)]
+```
+
+## Used Prediction Models
+
+Two methods will be applied to model the regressions and the best one (with higher accuracy when applied to the Test data set) will be used for the quiz predictions. The methods are: Decision Tree and Random Forests (rf).
+
+A Confusion Matrix is plotted at the end of each analysis to better visualize the accuracy of the models.
+
+## Decision Tree Model
+
+
+```{r decision tree model}
+set.seed(1967)
+fit_DT <- rpart(classe ~ ., data = train_set, method="class")
+fancyRpartPlot(fit_DT)
+predict_DT <- predict(fit_DT, newdata = test_set, type="class")
+conf_matrix_DT <- confusionMatrix(table(predict_DT, test_set$classe))
+conf_matrix_DT
+plot(conf_matrix_DT$table, col = conf_matrix_DT$byClass, 
+     main = paste("Decision Tree Model: Predictive Accuracy =",
+                  round(conf_matrix_DT$overall['Accuracy'], 4)))
+```
+
+## Random Forest Model
+
+
+```{r random forest model}
+set.seed(1967)
+ctrl_RF <- trainControl(method = "repeatedcv", number = 5, repeats = 2)
+fit_RF  <- train(classe ~ ., data = train_set, method = "rf",
+                 trControl = ctrl_RF, verbose = FALSE)
+fit_RF$finalModel
+predict_RF <- predict(fit_RF, newdata = test_set)
+conf_matrix_RF <- confusionMatrix(table(predict_RF, test_set$classe))
+conf_matrix_RF
+
+plot(fit_RF)
+print(fit_RF$bestTune)
+```
+
+## Result
+
+The predictive accuracy of the Random Forest model is 99.8 %, which is much larger than for the decision tree model (74.5%).
+So, the Random Forest model will be used for predictions.
+
+
+## Predictions for testing dataset
+
+Predictions:
+
+```{r predictions}
+result <- predict(fit_RF, data_quiz)
+result
+```
